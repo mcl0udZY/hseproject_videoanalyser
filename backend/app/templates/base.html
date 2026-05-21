@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="page-shell">
+    <div class="container">
+      <header class="nav">
+        <a class="brand" href="/">
+          <span class="brand-mark">VD</span>
+          <span>
+            <strong>{{ title }}</strong>
+            <span class="brand-subtitle">Транскрибация, краткое содержание и ключевые фрагменты</span>
+          </span>
+        </a>
+        <nav class="nav-links">
+          <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Загрузка</a>
+          <a href="/dashboard" class="{% if request.url.path == '/dashboard' %}active{% endif %}">Панель</a>
+          <a href="/docs">API</a>
+        </nav>
+      </header>
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+  <script src="/static/app.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

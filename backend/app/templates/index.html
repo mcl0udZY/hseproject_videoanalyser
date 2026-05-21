@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero hero-grid">
+  <div>
+    <div class="eyebrow">Обработка видео</div>
+    <h1>Транскрибация, короткий summary и highlights в одном потоке</h1>
+    <p>
+      Загружайте видео, отправляйте его в очередь и получайте транскрипт,
+      extractive summary и ключевые фрагменты на одной понятной странице результата.
+    </p>
+    <div class="hero-points">
+      <span>FastAPI</span>
+      <span>Redis + RQ</span>
+      <span>faster-whisper</span>
+      <span>ffmpeg</span>
+      <span>SQLite</span>
+    </div>
+  </div>
+  <aside class="hero-note">
+    <div class="section-title">Этапы обработки</div>
+    <ol class="steps-list">
+      <li>Загрузка и сохранение видео</li>
+      <li>Постановка задачи в очередь</li>
+      <li>Транскрибация аудио</li>
+      <li>Extractive summary</li>
+      <li>Выделение ключевых фрагментов</li>
+    </ol>
+  </aside>
+</section>
+
+<section class="card upload-card">
+  <div class="card-head">
+    <div>
+      <div class="section-title">Новая задача</div>
+      <h2>Загрузка видео на обработку</h2>
+    </div>
+    <p class="muted card-note">Для более точной русской транскрибации используйте `base` или `small`, для более быстрых результатов обработки используйте параметр `tiny`.</p>
+  </div>
+
+  <form id="uploadForm" class="form-grid">
+    <div class="field field-wide">
+      <label for="file">Видео</label>
+      <input id="file" name="file" type="file" accept="video/*" required>
+      <p class="hint">Исходный файл, транскрипт, summary и остальные артефакты сохраняются внутри папки задачи.</p>
+    </div>
+
+    <div class="field">
+      <label for="asr_model">Модель Whisper</label>
+      <select id="asr_model" name="asr_model">
+        <option value="base" selected>base</option>
+        <option value="small">small</option>
+        <option value="tiny">tiny</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="language">Язык</label>
+      <select id="language" name="language">
+        <option value="ru">ru</option>
+        <option value="en">en</option>
+        <option value="auto">auto</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="transcription_mode">Режим транскрибации</label>
+      <select id="transcription_mode" name="transcription_mode">
+        <option value="accurate">accurate</option>
+        <option value="fast">fast</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="summary_mode">Режим summary</label>
+      <select id="summary_mode" name="summary_mode">
+        <option value="extractive">extractive</option>
+      </select>
+    </div>
+
+    <div class="field field-wide">
+      <label for="vocabulary_hint">Термины и бренды</label>
+      <input
+        id="vocabulary_hint"
+        name="vocabulary_hint"
+        type="text"
+        placeholder="Например: Яндекс, GAC Aion Y Plus, Москвич, Алиса, Business FM"
+      >
+      <p class="hint">Подсказки помогают модели аккуратнее распознавать названия брендов, моделей, имён и технических терминов.</p>
+    </div>
+
+    <div class="field form-actions">
+      <button id="uploadBtn" type="submit">Запустить обработку</button>
+      <div id="message" class="notice muted">После загрузки откроется страница с текущим статусом обработки.</div>
+    </div>
+  </form>
+
+  <div id="uploadProgressCard" class="progress-card" hidden>
+    <div class="progress-card__top">
+      <strong>Загрузка файла</strong>
+      <span id="uploadPercent">0%</span>
+    </div>
+    <div class="progress"><div id="uploadBar"></div></div>
+    <p id="uploadDetail" class="muted">Подготавливаем запрос...</p>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const form = document.getElementById('uploadForm');
+const btn = document.getElementById('uploadBtn');
+const fileInput = document.getElementById('file');
+const message = document.getElementById('message');
+const uploadProgressCard = document.getElementById('uploadProgressCard');
+const uploadBar = document.getElementById('uploadBar');
+const uploadPercent = document.getElementById('uploadPercent');
+const uploadDetail = document.getElementById('uploadDetail');
+
+function setUploadProgress(value, detail) {
+  uploadProgressCard.hidden = false;
+  uploadBar.style.width = `${value}%`;
+  uploadPercent.textContent = `${value}%`;
+  uploadDetail.textContent = detail;
+}
+
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+
+  const file = fileInput.files[0];
+  if (!file) {
+    message.textContent = 'Сначала выберите видеофайл.';
+    message.className = 'notice error';
+    return;
+  }
+
+  btn.disabled = true;
+  message.textContent = 'Идёт загрузка файла...';
+  message.className = 'notice muted';
+  setUploadProgress(0, `Файл ${file.name} отправляется на сервер.`);
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('asr_model', document.getElementById('asr_model').value);
+  formData.append('transcription_mode', document.getElementById('transcription_mode').value);
+  formData.append('language', document.getElementById('language').value);
+  formData.append('summary_mode', document.getElementById('summary_mode').value);
+  formData.append('vocabulary_hint', document.getElementById('vocabulary_hint').value);
+
+  try {
+    const data = await uploadForm('/api/jobs/upload', formData, (progress) => {
+      setUploadProgress(progress, `Передано ${progress}% файла. После завершения откроется страница результата.`);
+    });
+    setUploadProgress(100, 'Файл сохранён. Переходим к странице результата...');
+    window.location.href = `/result/${data.id}`;
+  } catch (error) {
+    message.textContent = error.message;
+    message.className = 'notice error';
+    btn.disabled = false;
+    uploadProgressCard.hidden = true;
+  }
+});
+</script>
+{% endblock %}
