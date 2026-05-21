@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <div class="eyebrow">Результат обработки</div>
+  <h1>Страница задачи</h1>
+  <p>Статус обновляется автоматически, пока задача не завершится. Прогресс ниже относится к этапам обработки, а не к загрузке файла.</p>
+</section>
+
+<section class="card result-overview">
+  <div class="card-head">
+    <div>
+      <div class="section-title">Статус задачи</div>
+      <h2 id="filename">Файл загружается...</h2>
+      <div id="statusText" class="muted"></div>
+    </div>
+    <div class="status-column">
+      <span id="statusBadge" class="status">queued</span>
+      <div class="job-meta">
+        <span>job_id: <code>{{ job_id }}</code></span>
+        <span>создано: <span id="createdAt">—</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="overview-grid">
+    <div class="metric">
+      <span class="metric-label">Этап обработки</span>
+      <strong id="statusStage">Ожидание</strong>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Модель</span>
+      <strong id="modelText">—</strong>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Язык</span>
+      <strong id="languageText">—</strong>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Summary</span>
+      <strong id="summaryModeText">—</strong>
+    </div>
+  </div>
+
+  <div class="progress-block">
+    <div class="progress-head">
+      <span class="muted">Прогресс обработки</span>
+      <strong id="progressText">0%</strong>
+    </div>
+    <div class="progress"><div id="progressBar"></div></div>
+  </div>
+
+  <div id="warningBox" class="box warning" style="margin-top:16px; display:none;"></div>
+  <div id="errorBox" class="box error" style="margin-top:16px; display:none;"></div>
+</section>
+
+<section class="grid grid-2">
+  <article class="card">
+    <div class="section-title">Краткое содержание</div>
+    <div id="summaryBox" class="box muted">Краткое содержание появится после завершения обработки.</div>
+  </article>
+  <article class="card">
+    <div class="section-title">Анализ содержания</div>
+    <div id="analysisBox" class="box muted">Анализ появится после завершения обработки.</div>
+  </article>
+</section>
+
+<section class="card">
+  <div class="section-title">Highlights</div>
+    <div id="highlightsBox" class="box muted">Ключевые фрагменты пока недоступны.</div>
+</section>
+
+<section class="grid grid-2">
+  <article class="card">
+    <div class="section-title">Итоговое видео</div>
+    <div id="videoBox" class="empty-state">Итоговый ролик появится после завершения рендеринга.</div>
+  </article>
+  <article class="card">
+    <div class="section-title">Файлы результата</div>
+    <div id="filesBox" class="actions muted">Файлы станут доступны после завершения обработки.</div>
+  </article>
+</section>
+
+<div class="card">
+  <div class="section-title">Предпросмотр транскрипта</div>
+  <pre id="transcriptBox">Транскрипт появится после завершения обработки.</pre>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const jobId = '{{ job_id }}';
+let pollHandle = null;
+
+function renderFiles(files) {
+  const box = document.getElementById('filesBox');
+  const entries = Object.entries(files || {});
+  if (!entries.length) {
+    box.className = 'actions muted';
+    box.textContent = 'Файлы пока недоступны.';
+    return;
+  }
+
+  box.className = 'actions';
+  box.innerHTML = entries
+    .map(([key, url]) => `<a class="link-button" href="${url}" target="_blank">${escapeHtml(key)}</a>`)
+    .join('');
+}
+
+function renderHighlights(items) {
+  const box = document.getElementById('highlightsBox');
+  if (!items || !items.length) {
+    box.className = 'box muted';
+    box.textContent = 'Ключевые фрагменты пока недоступны.';
+    return;
+  }
+
+  box.className = 'box';
+  box.innerHTML = `<ol class="highlights">${items.map((item) => `<li><strong>#${item.rank}</strong> ${formatTimecode(item.start)} - ${formatTimecode(item.end)}<span class="highlight-duration"> · ${Math.round(item.end - item.start)} сек</span><br>${escapeHtml(item.text)}${item.analysis ? `<div class="highlight-analysis">${escapeHtml(item.analysis)}</div>` : ''}</li>`).join('')}</ol>`;
+}
+
+function renderAnalysis(metadata = {}) {
+  const box = document.getElementById('analysisBox');
+  const keywords = Array.isArray(metadata.topic_keywords) ? metadata.topic_keywords : [];
+  const durationRange = Array.isArray(metadata.highlight_duration_range) ? metadata.highlight_duration_range : [];
+  const mode = metadata.transcription_mode || 'accurate';
+
+  if (!keywords.length && !durationRange.length) {
+    box.className = 'box muted';
+    box.textContent = 'Анализ появится после завершения обработки.';
+    return;
+  }
+
+  const durationText = durationRange.length === 2 ? `${durationRange[0]}-${durationRange[1]} сек` : '—';
+  const chips = keywords.map((keyword) => `<span class="keyword-chip">${escapeHtml(keyword)}</span>`).join('');
+  box.className = 'box';
+  box.innerHTML = `
+    <div class="analysis-grid">
+      <div><span class="metric-label">ASR mode</span><strong>${escapeHtml(mode)}</strong></div>
+      <div><span class="metric-label">Длина highlights</span><strong>${escapeHtml(durationText)}</strong></div>
+    </div>
+    <div class="keyword-row">${chips || '<span class="muted">Ключевые темы появятся после обработки.</span>'}</div>
+  `;
+}
+
+function renderVideo(files) {
+  const box = document.getElementById('videoBox');
+  if (files.highlights_video) {
+    box.className = 'video-frame';
+    box.innerHTML = `<video controls preload="metadata" src="${files.highlights_video}" style="width:100%;border-radius:16px;"></video>`;
+    return;
+  }
+
+  box.className = 'empty-state';
+  box.textContent = 'Итоговый ролик появится после завершения рендеринга.';
+}
+
+async function loadJob() {
+  try {
+    const job = await fetchJson(`/api/jobs/${jobId}`);
+    document.getElementById('filename').textContent = job.original_filename;
+    document.getElementById('statusText').textContent = humanStatus(job.status);
+    document.getElementById('statusStage').textContent = humanStatus(job.status);
+    document.getElementById('createdAt').textContent = formatDateTime(job.created_at);
+    const modeSuffix = job.result_payload?.metadata?.transcription_mode ? ` / ${job.result_payload.metadata.transcription_mode}` : '';
+    document.getElementById('modelText').textContent = `${job.asr_model}${modeSuffix}`;
+    document.getElementById('languageText').textContent = job.language;
+    document.getElementById('summaryModeText').textContent = job.summary_mode;
+
+    const badge = document.getElementById('statusBadge');
+    badge.className = statusClass(job.status);
+    badge.textContent = humanStatus(job.status);
+
+    document.getElementById('progressBar').style.width = `${job.progress}%`;
+    document.getElementById('progressText').textContent = `${job.progress}%`;
+
+    const errorBox = document.getElementById('errorBox');
+    if (job.error_message) {
+      errorBox.style.display = 'block';
+      errorBox.textContent = job.error_message;
+    } else {
+      errorBox.style.display = 'none';
+    }
+
+    const payload = job.result_payload || {};
+    const warningBox = document.getElementById('warningBox');
+    const renderWarning = payload.metadata?.render_warning;
+    if (renderWarning) {
+      warningBox.style.display = 'block';
+      warningBox.textContent = renderWarning;
+    } else {
+      warningBox.style.display = 'none';
+    }
+
+    document.getElementById('summaryBox').className = payload.summary_text ? 'box' : 'box muted';
+    document.getElementById('summaryBox').textContent = payload.summary_text || 'Краткое содержание появится после завершения обработки.';
+    document.getElementById('transcriptBox').textContent = payload.transcript_preview || 'Транскрипт появится после завершения обработки.';
+    renderAnalysis(payload.metadata || {});
+    renderHighlights(payload.highlights || []);
+    renderFiles(payload.files || {});
+    renderVideo(payload.files || {});
+
+    if ((job.status === 'done' || job.status === 'failed') && pollHandle) {
+      clearInterval(pollHandle);
+      pollHandle = null;
+    }
+  } catch (error) {
+    const errorBox = document.getElementById('errorBox');
+    errorBox.style.display = 'block';
+    errorBox.textContent = error.message;
+  }
+}
+
+loadJob();
+pollHandle = setInterval(loadJob, 5000);
+</script>
+{% endblock %}

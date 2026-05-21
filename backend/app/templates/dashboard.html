@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <div class="eyebrow">Список задач</div>
+  <h1>Панель задач</h1>
+  <p>Последние задания на обработку видео: статус, модель, время запуска и быстрый переход к результату.</p>
+</section>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Файл</th>
+          <th>Статус</th>
+          <th>Прогресс</th>
+          <th>Модель</th>
+          <th>Создано</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="jobsBody">
+        <tr><td colspan="6" class="muted">Загрузка...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadJobs() {
+  const body = document.getElementById('jobsBody');
+  try {
+    const data = await fetchJson('/api/jobs');
+    if (!data.items.length) {
+      body.innerHTML = '<tr><td colspan="6" class="muted">Задач пока нет.</td></tr>';
+      return;
+    }
+
+    body.innerHTML = data.items.map((job) => `
+      <tr>
+        <td>
+          <strong>${escapeHtml(job.original_filename)}</strong>
+          <div class="table-subtext">${job.id}</div>
+        </td>
+        <td><span class="${statusClass(job.status)}">${humanStatus(job.status)}</span></td>
+        <td>${job.progress}%</td>
+        <td>${escapeHtml(job.asr_model)}</td>
+        <td>${formatDateTime(job.created_at)}</td>
+        <td><a class="link-button" href="/result/${job.id}">Открыть</a></td>
+      </tr>
+    `).join('');
+  } catch (error) {
+    body.innerHTML = `<tr><td colspan="6" class="error">${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
+loadJobs();
+setInterval(loadJobs, 5000);
+</script>
+{% endblock %}
