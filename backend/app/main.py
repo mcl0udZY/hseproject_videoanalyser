@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .config import JOBS_DIR, TEMPLATES_DIR, STATIC_DIR, settings
-from .db import Base, SessionLocal, engine, get_db
+from .db import Base, engine, get_db
 from .models import Job
 from .queue import enqueue_video_job
 from .schemas import JobCreateResponse, JobDetailResponse, JobListResponse
