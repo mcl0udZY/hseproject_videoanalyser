@@ -48,5 +48,8 @@ jobs:
       - name: Run Ruff
         run: ruff check app tests
 
+      - name: Run PEP8 check
+        run: pycodestyle app tests --max-line-length=140
+
       - name: Run tests
         run: pytest -q
