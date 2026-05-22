@@ -19,16 +19,29 @@ from app.config import JOBS_DIR, STORAGE_DIR, UPLOADS_DIR
 from app.db import Base, engine
 
 
+def clear_dir(path: Path):
+    path.mkdir(parents=True, exist_ok=True)
+
+    for item in path.iterdir():
+        if item.is_dir():
+            shutil.rmtree(item)
+        else:
+            item.unlink()
+
+
 @pytest.fixture(autouse=True)
 def clean_test_state():
-    if TEST_STORAGE.exists():
-        shutil.rmtree(TEST_STORAGE)
-
     STORAGE_DIR.mkdir(parents=True, exist_ok=True)
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
 
+    engine.dispose()
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
 
+    clear_dir(UPLOADS_DIR)
+    clear_dir(JOBS_DIR)
+
     yield
+
+    engine.dispose()
