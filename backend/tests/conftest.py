@@ -15,9 +15,6 @@ os.environ.setdefault("DEFAULT_ASR_MODEL", "tiny")
 os.environ.setdefault("DEFAULT_LANGUAGE", "ru")
 os.environ.setdefault("DEFAULT_SUMMARY_MODE", "extractive")
 
-from app.config import JOBS_DIR, STORAGE_DIR, UPLOADS_DIR
-from app.db import Base, engine
-
 
 def clear_dir(path: Path):
     path.mkdir(parents=True, exist_ok=True)
@@ -31,6 +28,9 @@ def clear_dir(path: Path):
 
 @pytest.fixture(autouse=True)
 def clean_test_state():
+    from app.config import JOBS_DIR, STORAGE_DIR, UPLOADS_DIR
+    from app.db import Base, engine
+
     STORAGE_DIR.mkdir(parents=True, exist_ok=True)
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
