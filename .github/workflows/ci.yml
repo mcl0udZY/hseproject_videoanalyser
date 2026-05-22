@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "danila-frontend", "tests-ci"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint-and-test:
+    name: Ruff and pytest
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      APP_NAME: VideoDigest
+      STORAGE_DIR: /tmp/videodigest-storage
+      DATABASE_URL: sqlite:////tmp/videodigest-test.db
+      REDIS_URL: redis://localhost:6379/0
+      QUEUE_NAME: test-video-jobs
+      DEFAULT_ASR_MODEL: tiny
+      DEFAULT_LANGUAGE: ru
+      DEFAULT_SUMMARY_MODE: extractive
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run Ruff
+        run: ruff check app tests
+
+      - name: Run tests
+        run: pytest -q

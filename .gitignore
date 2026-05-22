@@ -4,3 +4,16 @@ __pycache__/
 storage/
 .venv/
 .DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Local env and storage
+.env
+storage/
+
+# macOS
+.DS_Store
